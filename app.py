@@ -229,7 +229,7 @@ if st.button("Run Simulation", type="primary"):
     # --- PLOT 5: SENSITIVITY LANDSCAPE + GRADIENT ---
     with tab3:
         st.subheader("Sensitivity Landscape & Gradient")
-        st.write("The Gradient $\partial H / \partial \alpha$ ")
+        st.write("The Gradient $\partial H / \partial \\alpha$ ")
         
         k_range = np.linspace(0.1, 5.0, 200)
         I_vals = []
@@ -249,7 +249,7 @@ if st.button("Run Simulation", type="primary"):
         # Plot Integral (Left Axis)
         ln1 = ax5.plot(k_range, I_vals, color='tab:blue', linewidth=2, label='Integral I(k)')
         ax5.set_xlabel("Parameter Guess k")
-        ax5.set_ylabel("Integral Value", color='tab:blue')
+        ax5.set_ylabel("$\partial H / \partial \\alpha$", color='tab:blue')
         ax5.tick_params(axis='y', labelcolor='tab:blue')
         
         # Plot Gradient (Right Axis)
