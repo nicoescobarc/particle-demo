@@ -157,7 +157,7 @@ if st.button("Run Simulation", type="primary"):
     
     st.divider()
     
-    st.header("🔍 Deep Dive Analysis")
+    st.header("Some plots to visualize the dynamics")
     st.markdown("Explore the physics and sensitivity landscapes through these interactive plots.")
     
     # TABS for the 3 New Plots
