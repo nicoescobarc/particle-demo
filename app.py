@@ -160,10 +160,10 @@ if st.button("Run Simulation", type="primary"):
     st.header("Some plots to visualize the dynamics")
     st.markdown("Explore the physics and sensitivity landscapes through these interactive plots.")
     
-    # TABS for the 3 New Plots
-    tab1, tab2, tab3 = st.tabs(["Trajectory Divergence", "Error Evolution", "Sensitivity Landscape"])
+    # TABS for the 4 Plots
+    tab1, tab2, tab3, tab4 = st.tabs(["Trajectory Divergence", "Error Evolution", "Sensitivity Landscape", "Terminal Error vs k"])
     
-    # --- PLOT 3: DIVERGENCE OF TRAJECTORIES (FAN PLOT) ---
+    # --- PLOT 1: DIVERGENCE OF TRAJECTORIES (FAN PLOT) ---
     with tab1:
         st.subheader("Trajectory Divergence (X-Y Projection)")
         st.write("Visualizing how different parameter values ($k$) cause trajectories to vary out over time.")
@@ -195,7 +195,7 @@ if st.button("Run Simulation", type="primary"):
         ax3.grid(True, alpha=0.3)
         st.pyplot(fig3)
 
-    # --- PLOT 4: ERROR MAGNITUDE VS TIME ---
+    # --- PLOT 2: ERROR MAGNITUDE VS TIME ---
     with tab2:
         st.subheader("Error Magnitude vs. Time")
         st.write("How the distance ($||\mathbf{x}(t_m) - \mathbf{x_m}||$) between the True particle and your Model particle grows over time.")
@@ -226,7 +226,7 @@ if st.button("Run Simulation", type="primary"):
         ax4.grid(True, alpha=0.3)
         st.pyplot(fig4)
 
-    # --- PLOT 5: SENSITIVITY LANDSCAPE + GRADIENT ---
+    # --- PLOT 3: SENSITIVITY LANDSCAPE ---
     with tab3:
         st.subheader("Sensitivity Landscape & Gradient")
         st.write("The Gradient $\partial H / \partial \\alpha$ ")
@@ -273,3 +273,41 @@ if st.button("Run Simulation", type="primary"):
         ax5.grid(True, alpha=0.3)
         
         st.pyplot(fig5)
+
+    # --- PLOT 4: TERMINAL ERROR VS K ---
+    with tab4:
+        st.subheader("Terminal Error vs Parameter k")
+        st.write("This plot shows the magnitude of the position error at time $t_m$ as a function of the parameter guess $k$.")
+        st.write("Ideally, this error should be zero when $k = k_{true}$.")
+
+        k_range_err = np.linspace(0.1, 8.0, 200)
+        terminal_errors = []
+
+        # True position is constant regardless of guess k
+        pos_true_fixed = compute_position(tm, k_true, u_fluid, x0, a0, n_hat, St)
+
+        for k_val in k_range_err:
+            # Position with guessed k
+            p_guess = compute_position(tm, k_val, u_fluid, x0, a0, n_hat, St)
+            
+            # Error magnitude
+            err_mag = np.linalg.norm(pos_true_fixed - p_guess)
+            terminal_errors.append(err_mag)
+
+        fig6, ax6 = plt.subplots(figsize=(8, 5))
+        ax6.plot(k_range_err, terminal_errors, color='darkorange', linewidth=2, label='Error Magnitude')
+        
+        # Current user guess marker
+        current_err_mag = np.linalg.norm(pos_true - pos_guess)
+        ax6.scatter([k_guess], [current_err_mag], color='red', s=100, zorder=5, label=f'Your Guess (k={k_guess})')
+
+        # True k marker
+        ax6.axvline(x=k_true, color='green', linestyle='--', label=f'True k={k_true}')
+        
+        ax6.set_xlabel("Parameter Guess k")
+        ax6.set_ylabel("Terminal Position Error $||\mathbf{x}(t_m) - \mathbf{x}_{true}(t_m)||$")
+        ax6.set_title(f"Terminal Error at t={tm} vs k")
+        ax6.legend()
+        ax6.grid(True, alpha=0.3)
+        
+        st.pyplot(fig6)
