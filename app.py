@@ -1,134 +1,109 @@
 import streamlit as st
 import numpy as np
+import matplotlib.pyplot as plt
 
-def get_relative_velocity_params(u_fluid, u_p0, k, St=1.0):
-    """
-    Computes initial relative parameters:
-    a0 (magnitude), n_hat (direction), and C1 (integration constant).
-    """
-    # Relative velocity vector a_vec = u - u_p
-    a_vec_0 = u_fluid - u_p0
-    a0 = np.linalg.norm(a_vec_0)
-    
-    # Handle case where relative velocity is zero
-    if a0 < 1e-9:
-        return 0.0, np.zeros_like(u_fluid), 0.0
-        
-    n_hat = a_vec_0 / a0
-    C1 = a0 / (1 + k * a0)
-    return a0, n_hat, C1
+# --- Helper Functions based on Analytical Solutions ---
 
-def compute_final_position(tm, k, u_fluid, u_p0, St=1.0):
-    """
-    Computes the final position x_p(tm) using the analytical solution.
-    Assuming x_p(0) = [0, 0, 0].
-    """
-    a0, n_hat, C1 = get_relative_velocity_params(u_fluid, u_p0, k, St)
+def get_constants(u_fluid, u_p0):
+    """Calculates initial relative velocity magnitude (a0) and direction (n_hat)."""
+    rel_vec = u_fluid - u_p0
+    a0 = np.linalg.norm(rel_vec)
     
+    # Handle case where particle moves exactly with fluid
     if a0 < 1e-9:
-        # If relative velocity is zero, particle moves with fluid
-        return u_fluid * tm
-    
-    # Analytical term for the integral of a(t)
-    # Integral = (St/k) * ln( (1 - k*C1*exp(-t/St)) / (1 - k*C1) )
-    exp_term = np.exp(-tm / St)
-    numerator = 1 - k * C1 * exp_term
-    denominator = 1 - k * C1
-    
-    # Avoid log of negative/zero (though physics should prevent this)
-    if numerator <= 0 or denominator == 0:
-        val_integral = 0
+        n_hat = np.zeros_like(rel_vec)
     else:
-        val_integral = (St / k) * np.log(numerator / denominator)
-    
-    # x_p(t) = x_p0 + u*t - n_hat * integral(a)
-    # Assuming x_p0 = 0
-    x_final = u_fluid * tm - n_hat * val_integral
-    return x_final
+        n_hat = rel_vec / a0
+    return a0, n_hat
 
-def compute_integral_term(tm, k, u_fluid, u_p0, c1, St=1.0):
-    """
-    Computes the integral I(tm) derived in the previous steps.
-    """
-    a0, n_hat, C1 = get_relative_velocity_params(u_fluid, u_p0, k, St)
-    
+def compute_a_t(t, k, a0, St=1.0):
+    """Computes relative velocity magnitude a(t)."""
     if a0 < 1e-9:
         return 0.0
+    
+    C1 = a0 / (1 + k * a0)
+    exp_term = np.exp(-t / St)
+    denom = 1 - k * C1 * exp_term
+    
+    # Safety check for singularity
+    if abs(denom) < 1e-9:
+        return 0.0
+        
+    return (C1 * exp_term) / denom
 
-    # Current relative velocity magnitude a(tm)
-    exp_term = np.exp(-tm / St)
-    a_tm = (C1 * exp_term) / (1 - k * C1 * exp_term)
-    
-    # Projection of c1 onto flow direction n_hat
-    c1_parallel = np.dot(c1, n_hat)
-    
-    # The Integral Formula
-    # I = (St * c1_parallel / k^2) * [ ln((1+k*a(t))/(1+k*a0)) + (1+k*a0)/(1+k*a(t)) - 1 ]
-    
-    term1 = np.log((1 + k * a_tm) / (1 + k * a0))
-    term2 = (1 + k * a0) / (1 + k * a_tm)
-    
-    I_val = (St * c1_parallel / (k**2)) * (term1 + term2 - 1)
-    
-    return I_val
+def compute_position(t, k, u_fluid, x0, a0, n_hat, St=1.0):
+    """
+    Computes position x_p(t) using the analytical derivation:
+    x_p(t) = x0 + u*t - (St/k) * ln(...) * n_hat
+    """
+    if a0 < 1e-9:
+        return x0 + u_fluid * t
 
-# --- STREAMLIT APP LAYOUT ---
+    # Avoid division by zero if k is extremely small
+    if abs(k) < 1e-9: 
+        k = 1e-9
+
+    C1 = a0 / (1 + k * a0)
+    
+    # Calculate the log term argument
+    numerator = 1 - k * C1 * np.exp(-t / St)
+    denominator = 1 - k * C1
+    
+    # Safety check for log domain
+    if numerator <= 0 or denominator <= 0:
+        return x0 + u_fluid * t
+        
+    log_arg = numerator / denominator
+    log_term = np.log(log_arg)
+    
+    displacement = u_fluid * t - (St / k) * log_term * n_hat
+    return x0 + displacement
+
+def compute_adjoint_integral(t, k, a0, c1, n_hat, St=1.0):
+    """
+    Computes the adjoint sensitivity integral I(t).
+    Formula: I(t) = (St * (c1 . n) / k^2) * [ ln(...) + ... - 1 ]
+    """
+    if a0 < 1e-9 or abs(k) < 1e-9:
+        return 0.0
+
+    # 1. Project c1 onto n_hat (dot product)
+    c1_dot_n = np.dot(c1, n_hat)
+    
+    # 2. Get a(t)
+    a_t = compute_a_t(t, k, a0, St)
+    
+    # 3. Compute terms inside the bracket
+    # Term A: ln( (1 + k*a(t)) / (1 + k*a0) )
+    val_a = (1 + k * a_t) / (1 + k * a0)
+    if val_a <= 0: return 0.0
+    term_log = np.log(val_a)
+    
+    # Term B: (1 + k*a0) / (1 + k*a(t))
+    val_b = (1 + k * a0) / (1 + k * a_t)
+    term_frac = val_b
+    
+    # Combine
+    prefactor = (St * c1_dot_n) / (k**2)
+    result = prefactor * (term_log + term_frac - 1)
+    
+    return result
+
+# --- Streamlit App UI ---
 
 st.set_page_config(page_title="Adjoint Sensitivity Demo", layout="wide")
 
-st.title("🌊 Adjoint Sensitivity Demo: Particle in Fluid Flow")
+st.title("🌊 Adjoint Sensitivity Demo")
 st.markdown("""
-This app demonstrates the calculation of position and adjoint sensitivity for a particle moving in a constant fluid flow.
-**Fixed Parameters:** Fluid Velocity $\mathbf{u} = (0.5, 0.5, 0.5)$, Stokes Number $St=1$.
+This app demonstrates the **analytical adjoint sensitivity** for a particle in a fluid flow.
+It compares a "True" system ($k=4$) against a "Model" system (user guess) and computes the sensitivity integral.
 """)
 
-# Sidebar Inputs
-st.sidebar.header("Simulation Parameters")
-
-st.sidebar.subheader("Initial Particle Velocity u_p(0)")
-up0_x = st.sidebar.number_input("x-component", value=0.0)
-up0_y = st.sidebar.number_input("y-component", value=0.0)
-up0_z = st.sidebar.number_input("z-component", value=0.0)
-u_p0 = np.array([up0_x, up0_y, up0_z])
-
-tm = st.sidebar.number_input("Final Time (tm)", value=5.0, min_value=0.1)
-k_guess = st.sidebar.number_input("Initial Guess for k", value=1.0, min_value=0.1)
-
-# Fixed Constants
-k_true = 4.0
-u_fluid = np.array([0.5, 0.5, 0.5])
+# Constants
 St = 1.0
+u_fluid = np.array([0.5, 0.5, 0.5])
+k_true = 4.0
+x0 = np.array([0.0, 0.0, 0.0]) # Assume starting at origin
 
-# --- COMPUTATIONS ---
-
-if st.button("Run Simulation"):
-    # 1. Compute Forward Position with True k=4
-    x_true = compute_final_position(tm, k_true, u_fluid, u_p0, St)
-    
-    # 2. Compute Forward Position with Guess k
-    x_guess = compute_final_position(tm, k_guess, u_fluid, u_p0, St)
-    
-    # Compute c1 (The difference / Error)
-    c1 = x_true - x_guess
-    
-    # 3. Compute the Integral I(tm) using the Guess parameters and c1
-    integral_result = compute_integral_term(tm, k_guess, u_fluid, u_p0, c1, St)
-    
-    # --- DISPLAY RESULTS ---
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("📍 Positions")
-        st.info(f"**True Final Position (k={k_true}):**\n\n {np.round(x_true, 4)}")
-        st.warning(f"**Guessed Final Position (k={k_guess}):**\n\n {np.round(x_guess, 4)}")
-        
-    with col2:
-        st.subheader("📉 Differences & Sensitivity")
-        st.error(f"**Error Vector c₁ (True - Guess):**\n\n {np.round(c1, 4)}")
-        st.success(f"**Computed Integral Result:**\n\n `{integral_result:.6f}`")
-        
-    st.markdown("---")
-    st.markdown("### Visualization of Inputs")
-    st.write(f"Fluid Velocity: `{u_fluid}`")
-    st.write(f"Initial Relative Velocity $a_0$: `{np.linalg.norm(u_fluid - u_p0):.4f}`")
+# Sidebar Inputs
+st.sidebar
