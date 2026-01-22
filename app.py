@@ -166,9 +166,9 @@ if st.button("Run Simulation", type="primary"):
     # --- PLOT 3: DIVERGENCE OF TRAJECTORIES (FAN PLOT) ---
     with tab1:
         st.subheader("Trajectory Divergence (X-Y Projection)")
-        st.write("Visualizing how different parameter values ($k$) cause trajectories to fan out over time.")
+        st.write("Visualizing how different parameter values ($k$) cause trajectories to vary out over time.")
         
-        fig3, ax3 = plt.subplots(figsize=(6, 3.5))
+        fig3, ax3 = plt.subplots(figsize=(8, 5))
         
         # Time vector for trajectories
         t_traj = np.linspace(0, tm, 100)
@@ -182,7 +182,7 @@ if st.button("Run Simulation", type="primary"):
         ax3.plot(traj_guess[:,0], traj_guess[:,1], 'r--', linewidth=2.5, label=f'Your Guess (k={k_guess})')
         
         # 3. Plot "Ghost" Trajectories (The Fan)
-        ghost_ks = [1, 2, 3, 5, 6, 7]
+        ghost_ks = []
         for k_g in ghost_ks:
             if k_g == k_guess or k_g == k_true: continue # Skip duplicates
             traj_ghost = np.array([compute_position(t, k_g, u_fluid, x0, a0, n_hat, St) for t in t_traj])
@@ -200,7 +200,7 @@ if st.button("Run Simulation", type="primary"):
         st.subheader("Error Magnitude vs. Time")
         st.write("How the distance ($||\mathbf{x}(t_m) - \mathbf{x_m}||$) between the True particle and your Model particle grows over time.")
         
-        fig4, ax4 = plt.subplots(figsize=(6, 3.5))
+        fig4, ax4 = plt.subplots(figsize=(8, 5))
         
         # Compute error for a slightly longer range to show drift behavior
         t_err = np.linspace(0, max(tm, 5.0), 100) 
@@ -244,7 +244,7 @@ if st.button("Run Simulation", type="primary"):
         # Compute Gradient numerically
         # grad_vals = np.gradient(I_vals, k_range)
         
-        fig5, ax5 = plt.subplots(figsize=(6, 3.5))
+        fig5, ax5 = plt.subplots(figsize=(8, 5))
         
         # Plot Integral (Left Axis)
         ln1 = ax5.plot(k_range, I_vals, color='tab:blue', linewidth=2, label='Integral I(k)')
