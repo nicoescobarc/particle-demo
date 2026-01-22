@@ -93,7 +93,7 @@ def compute_adjoint_integral(t, k, a0, c1, n_hat, St=1.0):
 
 st.set_page_config(page_title="Adjoint Sensitivity Demo", layout="wide")
 
-st.title("🌊 Adjoint Sensitivity Demo")
+st.title("Adjoint Sensitivity Demo")
 st.markdown("""
 This app demonstrates the **analytical adjoint sensitivity** for a particle in a fluid flow.
 It compares a "True" system ($k=4$) against a "Model" system (user guess) and computes the sensitivity integral.
@@ -116,7 +116,7 @@ u0_z = col3.number_input("z", value=0.0)
 u_p0 = np.array([u0_x, u0_y, u0_z])
 
 st.sidebar.subheader("2. Settings")
-tm = st.sidebar.number_input("Final Time (tm)", value=2.0, min_value=0.1, step=0.1)
+tm = st.sidebar.number_input("Final Time (tm)", value=2.0, min_value=0.01, step=0.01)
 k_guess = st.sidebar.number_input("Guess for k", value=1.0, min_value=0.1, step=0.1)
 
 # Main Computation
@@ -146,16 +146,16 @@ if st.button("Run Simulation", type="primary"):
     c_left, c_right = st.columns(2)
     
     with c_left:
-        st.subheader("📍 True Position ($k=4$)")
+        st.subheader("True Position ($k=4$)")
         st.info(f"{pos_true}")
         
     with c_right:
-        st.subheader(f"📍 Model Position ($k={k_guess}$)")
+        st.subheader(f"Model Position ($k={k_guess}$)")
         st.warning(f"{pos_guess}")
         
     st.divider()
     
-    st.subheader("📉 The Forcing Vector ($\mathbf{c}_1$)")
+    st.subheader("The Forcing Vector ($\mathbf{c}_1$)")
     st.write("Difference between True and Model positions:")
     st.code(f"c1 = {c1}")
     
@@ -169,7 +169,7 @@ if st.button("Run Simulation", type="primary"):
         st.metric(label="Adjoint Sensitivity Integral", value=f"{integral_value:.6f}")
         
     with col_plot:
-        st.header("📊 Sensitivity Landscape")
+        st.header("Sensitivity Landscape")
         st.write("Integral value vs. Initial Guess $k$ (Range 0-5)")
         
         # --- PLOTTING LOGIC ---
