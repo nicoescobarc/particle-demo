@@ -2,6 +2,10 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
+plt.rcParams.update({
+    "text.usetex": False
+    })
+
 # --- Helper Functions based on Analytical Solutions ---
 
 def get_constants(u_fluid, u_p0):
