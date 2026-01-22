@@ -3,10 +3,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 plt.rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-plt.rc('text.latex', preamble=r'\usepackage{amsmath,amsthm,amssymb,latexsym,mathrsfs}')
-plt.rcParams.update({
-    "text.usetex": True
-    })
 
 # --- Helper Functions based on Analytical Solutions ---
 
