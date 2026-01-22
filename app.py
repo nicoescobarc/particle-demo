@@ -229,7 +229,7 @@ if st.button("Run Simulation", type="primary"):
     # --- PLOT 5: SENSITIVITY LANDSCAPE + GRADIENT ---
     with tab3:
         st.subheader("Sensitivity Landscape & Gradient")
-        st.write("The Integral $I(k)$ (Blue) and its Gradient $dI/dk$ (Orange). The gradient represents the 'steepness' of the cost.")
+        st.write("The Gradient $\partial H / \partial \alpha$ ")
         
         k_range = np.linspace(0.1, 5.0, 200)
         I_vals = []
@@ -242,7 +242,7 @@ if st.button("Run Simulation", type="primary"):
             I_vals.append(val)
             
         # Compute Gradient numerically
-        grad_vals = np.gradient(I_vals, k_range)
+        # grad_vals = np.gradient(I_vals, k_range)
         
         fig5, ax5 = plt.subplots(figsize=(6, 3.5))
         
@@ -253,10 +253,10 @@ if st.button("Run Simulation", type="primary"):
         ax5.tick_params(axis='y', labelcolor='tab:blue')
         
         # Plot Gradient (Right Axis)
-        ax5_twin = ax5.twinx()
-        ln2 = ax5_twin.plot(k_range, grad_vals, color='tab:orange', linestyle='--', linewidth=2, label='Gradient dI/dk')
-        ax5_twin.set_ylabel("Gradient (Sensitivity)", color='tab:orange')
-        ax5_twin.tick_params(axis='y', labelcolor='tab:orange')
+        # ax5_twin = ax5.twinx()
+        # ln2 = ax5_twin.plot(k_range, grad_vals, color='tab:orange', linestyle='--', linewidth=2, label='Gradient dI/dk')
+        # ax5_twin.set_ylabel("Gradient (Sensitivity)", color='tab:orange')
+        # ax5_twin.tick_params(axis='y', labelcolor='tab:orange')
         
         # User Marker
         ax5.scatter([k_guess], [integral_value], color='red', s=100, zorder=10, label='Your Guess')
@@ -265,7 +265,7 @@ if st.button("Run Simulation", type="primary"):
         ax5.axvline(x=k_true, color='green', linestyle=':', alpha=0.5, label=f'True k={k_true}')
         
         # Combined Legend
-        lines = ln1 + ln2
+        lines = ln1
         labels = [l.get_label() for l in lines]
         ax5.legend(lines, labels, loc='upper center')
         
