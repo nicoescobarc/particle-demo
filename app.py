@@ -168,7 +168,7 @@ if st.button("Run Simulation", type="primary"):
         st.subheader("Trajectory Divergence (X-Y Projection)")
         st.write("Visualizing how different parameter values ($k$) cause trajectories to fan out over time.")
         
-        fig3, ax3 = plt.subplots(figsize=(8, 5))
+        fig3, ax3 = plt.subplots(figsize=(6, 3.5))
         
         # Time vector for trajectories
         t_traj = np.linspace(0, tm, 100)
@@ -198,9 +198,9 @@ if st.button("Run Simulation", type="primary"):
     # --- PLOT 4: ERROR MAGNITUDE VS TIME ---
     with tab2:
         st.subheader("Error Magnitude vs. Time")
-        st.write("How the distance ($||\mathbf{c}_1||$) between the True particle and your Model particle grows over time.")
+        st.write("How the distance ($||\mathbf{x}(t_m) - \mathbf{x_m}||$) between the True particle and your Model particle grows over time.")
         
-        fig4, ax4 = plt.subplots(figsize=(8, 5))
+        fig4, ax4 = plt.subplots(figsize=(6, 3.5))
         
         # Compute error for a slightly longer range to show drift behavior
         t_err = np.linspace(0, max(tm, 5.0), 100) 
@@ -220,7 +220,7 @@ if st.button("Run Simulation", type="primary"):
         ax4.axvline(x=tm, color='gray', linestyle='--', alpha=0.5)
         
         ax4.set_xlabel("Time (t)")
-        ax4.set_ylabel("Error Magnitude $||\mathbf{c}_1(t)||$")
+        ax4.set_ylabel("Error Magnitude $||\mathbf{x}(t_m) - \mathbf{x_m}||$")
         ax4.set_title("Evolution of Prediction Error")
         ax4.legend()
         ax4.grid(True, alpha=0.3)
@@ -244,7 +244,7 @@ if st.button("Run Simulation", type="primary"):
         # Compute Gradient numerically
         grad_vals = np.gradient(I_vals, k_range)
         
-        fig5, ax5 = plt.subplots(figsize=(8, 5))
+        fig5, ax5 = plt.subplots(figsize=(6, 3.5))
         
         # Plot Integral (Left Axis)
         ln1 = ax5.plot(k_range, I_vals, color='tab:blue', linewidth=2, label='Integral I(k)')
