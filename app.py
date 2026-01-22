@@ -33,8 +33,7 @@ def compute_a_t(t, k, a0, St=1.0):
 
 def compute_position(t, k, u_fluid, x0, a0, n_hat, St=1.0):
     """
-    Computes position x_p(t) using the analytical derivation:
-    x_p(t) = x0 + u*t - (St/k) * ln(...) * n_hat
+    Computes position x_p(t) using the analytical derivation.
     """
     if a0 < 1e-9:
         return x0 + u_fluid * t
@@ -62,7 +61,6 @@ def compute_position(t, k, u_fluid, x0, a0, n_hat, St=1.0):
 def compute_adjoint_integral(t, k, a0, c1, n_hat, St=1.0):
     """
     Computes the adjoint sensitivity integral I(t).
-    Formula: I(t) = (St * (c1 . n) / k^2) * [ ln(...) + ... - 1 ]
     """
     if a0 < 1e-9 or abs(k) < 1e-9:
         return 0.0
@@ -74,12 +72,10 @@ def compute_adjoint_integral(t, k, a0, c1, n_hat, St=1.0):
     a_t = compute_a_t(t, k, a0, St)
     
     # 3. Compute terms inside the bracket
-    # Term A: ln( (1 + k*a(t)) / (1 + k*a0) )
     val_a = (1 + k * a_t) / (1 + k * a0)
     if val_a <= 0: return 0.0
     term_log = np.log(val_a)
     
-    # Term B: (1 + k*a0) / (1 + k*a(t))
     val_b = (1 + k * a0) / (1 + k * a_t)
     term_frac = val_b
     
@@ -116,7 +112,7 @@ u0_z = col3.number_input("z", value=0.0)
 u_p0 = np.array([u0_x, u0_y, u0_z])
 
 st.sidebar.subheader("2. Settings")
-tm = st.sidebar.number_input("Final Time (tm)", value=2.0, min_value=0.01, step=0.01)
+tm = st.sidebar.number_input("Final Time (tm)", value=2.0, min_value=0.1, step=0.1)
 k_guess = st.sidebar.number_input("Guess for k", value=1.0, min_value=0.1, step=0.1)
 
 # Main Computation
@@ -126,29 +122,23 @@ if st.button("Run Simulation", type="primary"):
     a0, n_hat = get_constants(u_fluid, u_p0)
     
     # 2. Forward Simulations
-    # True System (k=4) - This is the reference "measurement"
     pos_true = compute_position(tm, k_true, u_fluid, x0, a0, n_hat, St)
-    
-    # Guess System (k=guess)
     pos_guess = compute_position(tm, k_guess, u_fluid, x0, a0, n_hat, St)
     
-    # 3. Compute c1 (The Forcing Vector)
+    # 3. Compute c1
     c1 = pos_true - pos_guess
     
-    # 4. Compute Integral for the specific user guess
+    # 4. Compute Integral
     integral_value = compute_adjoint_integral(tm, k_guess, a0, c1, n_hat, St)
     
     # --- Results Display ---
     
     st.divider()
     
-    # Columns for positions
     c_left, c_right = st.columns(2)
-    
     with c_left:
         st.subheader("True Position ($k=4$)")
         st.info(f"{pos_true}")
-        
     with c_right:
         st.subheader(f"Model Position ($k={k_guess}$)")
         st.warning(f"{pos_guess}")
@@ -156,60 +146,126 @@ if st.button("Run Simulation", type="primary"):
     st.divider()
     
     st.subheader("The Forcing Vector ($\mathbf{c}_1$)")
-    st.write("Difference between True and Model positions:")
-    st.code(f"c1 = {c1}")
+    st.code(f"x_m-x_p(t_m) = {c1}")
+    
+    st.subheader("∫ Integral Result")
+    st.metric(label="Adjoint Sensitivity Integral", value=f"{integral_value:.6f}")
     
     st.divider()
     
-    col_metric, col_plot = st.columns([1, 2])
+    st.header("🔍 Deep Dive Analysis")
+    st.markdown("Explore the physics and sensitivity landscapes through these interactive plots.")
     
-    with col_metric:
-        st.header("∫ Integral Result")
-        st.markdown(r"Computed using the derived formula: $I(t_m)$")
-        st.metric(label="Adjoint Sensitivity Integral", value=f"{integral_value:.6f}")
+    # TABS for the 3 New Plots
+    tab1, tab2, tab3 = st.tabs(["Trajectory Divergence", "Error Evolution", "Sensitivity Landscape"])
+    
+    # --- PLOT 3: DIVERGENCE OF TRAJECTORIES (FAN PLOT) ---
+    with tab1:
+        st.subheader("Trajectory Divergence (X-Y Projection)")
+        st.write("Visualizing how different parameter values ($k$) cause trajectories to fan out over time.")
         
-    with col_plot:
-        st.header("Sensitivity Landscape")
-        st.write("Integral value vs. Initial Guess $k$ (Range 0-5)")
+        fig3, ax3 = plt.subplots(figsize=(8, 5))
         
-        # --- PLOTTING LOGIC ---
+        # Time vector for trajectories
+        t_traj = np.linspace(0, tm, 100)
         
-        # Create a range of k values from 0.1 to 5 (avoid 0 singularity)
-        k_range = np.linspace(0.1, 5.0, 100)
-        integral_results = []
+        # 1. Plot True Trajectory
+        traj_true = np.array([compute_position(t, k_true, u_fluid, x0, a0, n_hat, St) for t in t_traj])
+        ax3.plot(traj_true[:,0], traj_true[:,1], 'k-', linewidth=3, label=f'True (k={k_true})')
         
+        # 2. Plot User Guess
+        traj_guess = np.array([compute_position(t, k_guess, u_fluid, x0, a0, n_hat, St) for t in t_traj])
+        ax3.plot(traj_guess[:,0], traj_guess[:,1], 'r--', linewidth=2.5, label=f'Your Guess (k={k_guess})')
+        
+        # 3. Plot "Ghost" Trajectories (The Fan)
+        ghost_ks = [1, 2, 3, 5, 6, 7]
+        for k_g in ghost_ks:
+            if k_g == k_guess or k_g == k_true: continue # Skip duplicates
+            traj_ghost = np.array([compute_position(t, k_g, u_fluid, x0, a0, n_hat, St) for t in t_traj])
+            ax3.plot(traj_ghost[:,0], traj_ghost[:,1], 'b-', alpha=0.15) # Faint blue lines
+            
+        ax3.set_xlabel("X Position")
+        ax3.set_ylabel("Y Position")
+        ax3.set_title("Trajectory Fan: Effect of Parameter k")
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
+        st.pyplot(fig3)
+
+    # --- PLOT 4: ERROR MAGNITUDE VS TIME ---
+    with tab2:
+        st.subheader("Error Magnitude vs. Time")
+        st.write("How the distance ($||\mathbf{c}_1||$) between the True particle and your Model particle grows over time.")
+        
+        fig4, ax4 = plt.subplots(figsize=(8, 5))
+        
+        # Compute error for a slightly longer range to show drift behavior
+        t_err = np.linspace(0, max(tm, 5.0), 100) 
+        errors = []
+        
+        for t_val in t_err:
+            p_true = compute_position(t_val, k_true, u_fluid, x0, a0, n_hat, St)
+            p_model = compute_position(t_val, k_guess, u_fluid, x0, a0, n_hat, St)
+            dist = np.linalg.norm(p_true - p_model)
+            errors.append(dist)
+            
+        ax4.plot(t_err, errors, color='purple', linewidth=2)
+        
+        # Mark the measurement time tm
+        current_error = np.linalg.norm(pos_true - pos_guess)
+        ax4.scatter([tm], [current_error], color='red', s=100, zorder=5, label=f'Measurement Time $t_m$')
+        ax4.axvline(x=tm, color='gray', linestyle='--', alpha=0.5)
+        
+        ax4.set_xlabel("Time (t)")
+        ax4.set_ylabel("Error Magnitude $||\mathbf{c}_1(t)||$")
+        ax4.set_title("Evolution of Prediction Error")
+        ax4.legend()
+        ax4.grid(True, alpha=0.3)
+        st.pyplot(fig4)
+
+    # --- PLOT 5: SENSITIVITY LANDSCAPE + GRADIENT ---
+    with tab3:
+        st.subheader("Sensitivity Landscape & Gradient")
+        st.write("The Integral $I(k)$ (Blue) and its Gradient $dI/dk$ (Orange). The gradient represents the 'steepness' of the cost.")
+        
+        k_range = np.linspace(0.1, 5.0, 200)
+        I_vals = []
+        
+        # Compute I(k) for the whole range
         for k_val in k_range:
-            # For each k in the plot, we must:
-            # 1. Compute where the particle lands with *that* k
-            pos_k = compute_position(tm, k_val, u_fluid, x0, a0, n_hat, St)
-            
-            # 2. Compute the discrepancy vector c1 based on the TRUE position (fixed at k=4)
-            c1_k = pos_true - pos_k
-            
-            # 3. Compute the integral for this k
+            p_k = compute_position(tm, k_val, u_fluid, x0, a0, n_hat, St)
+            c1_k = pos_true - p_k # c1 relative to TRUE position
             val = compute_adjoint_integral(tm, k_val, a0, c1_k, n_hat, St)
-            integral_results.append(val)
+            I_vals.append(val)
             
-        # Create the Plot
-        fig, ax = plt.subplots(figsize=(6, 4))
+        # Compute Gradient numerically
+        grad_vals = np.gradient(I_vals, k_range)
         
-        # Plot the curve
-        ax.plot(k_range, integral_results, label='Integral I(k)', color='blue', linewidth=2)
+        fig5, ax5 = plt.subplots(figsize=(8, 5))
         
-        # Add the marker for the user's current guess
-        ax.scatter([k_guess], [integral_value], color='red', s=100, zorder=5, label=f'Your Guess (k={k_guess})')
+        # Plot Integral (Left Axis)
+        ln1 = ax5.plot(k_range, I_vals, color='tab:blue', linewidth=2, label='Integral I(k)')
+        ax5.set_xlabel("Parameter Guess k")
+        ax5.set_ylabel("Integral Value", color='tab:blue')
+        ax5.tick_params(axis='y', labelcolor='tab:blue')
         
-        # Add a reference line for the "True" k (where error should be 0)
-        ax.axvline(x=k_true, color='green', linestyle='--', alpha=0.5, label=f'True k={k_true}')
+        # Plot Gradient (Right Axis)
+        ax5_twin = ax5.twinx()
+        ln2 = ax5_twin.plot(k_range, grad_vals, color='tab:orange', linestyle='--', linewidth=2, label='Gradient dI/dk')
+        ax5_twin.set_ylabel("Gradient (Sensitivity)", color='tab:orange')
+        ax5_twin.tick_params(axis='y', labelcolor='tab:orange')
         
-        ax.set_xlabel("Parameter Guess ($k$)")
-        ax.set_ylabel("Integral Value")
-        ax.set_title("Sensitivity vs Parameter Guess")
-        ax.grid(True, alpha=0.3)
-        ax.legend()
+        # User Marker
+        ax5.scatter([k_guess], [integral_value], color='red', s=100, zorder=10, label='Your Guess')
         
-        st.pyplot(fig)
-    
-    # Visualization check
-    if a0 < 1e-9:
-        st.error("⚠️ Initial relative velocity is zero. No drag forces are active.")
+        # True k line
+        ax5.axvline(x=k_true, color='green', linestyle=':', alpha=0.5, label=f'True k={k_true}')
+        
+        # Combined Legend
+        lines = ln1 + ln2
+        labels = [l.get_label() for l in lines]
+        ax5.legend(lines, labels, loc='upper center')
+        
+        ax5.set_title("Sensitivity Landscape")
+        ax5.grid(True, alpha=0.3)
+        
+        st.pyplot(fig5)
