@@ -265,9 +265,9 @@ if st.button("Run Simulation", type="primary"):
         ax5.axvline(x=k_true, color='green', linestyle=':', alpha=0.5, label=f'True k={k_true}')
         
         # Combined Legend
-        lines = ln1
-        labels = [l.get_label() for l in lines]
-        ax5.legend(lines, labels, loc='upper center')
+        # lines = ln1
+        # labels = [l.get_label() for l in lines]
+        # ax5.legend(lines, labels, loc='upper center')
         
         ax5.set_title("Sensitivity Landscape")
         ax5.grid(True, alpha=0.3)
