@@ -2,8 +2,6 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
-plt.rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-
 # --- Helper Functions based on Analytical Solutions ---
 
 def get_constants(u_fluid, u_p0):
