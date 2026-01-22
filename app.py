@@ -58,15 +58,15 @@ def compute_position(t, k, u_fluid, x0, a0, n_hat, St=1.0):
     displacement = u_fluid * t - (St / k) * log_term * n_hat
     return x0 + displacement
 
-def compute_adjoint_integral(t, k, a0, x_diff, n_hat, St=1.0):
+def compute_adjoint_integral(t, k, a0, c1, n_hat, St=1.0):
     """
     Computes the adjoint sensitivity integral I(t).
     """
     if a0 < 1e-9 or abs(k) < 1e-9:
         return 0.0
 
-    # 1. Project x_diff onto n_hat (dot product)
-    x_diff_dot_n = np.dot(x_diff, n_hat)
+    # 1. Project c1 onto n_hat (dot product)
+    c1_dot_n = np.dot(c1, n_hat)
     
     # 2. Get a(t)
     a_t = compute_a_t(t, k, a0, St)
@@ -80,7 +80,7 @@ def compute_adjoint_integral(t, k, a0, x_diff, n_hat, St=1.0):
     term_frac = val_b
     
     # Combine
-    prefactor = (St * x_diff_dot_n) / (k**2)
+    prefactor = (St * c1_dot_n) / (k**2)
     result = prefactor * (term_log + term_frac - 1)
     
     return result
@@ -146,7 +146,7 @@ if st.button("Run Simulation", type="primary"):
     st.divider()
     
     st.subheader("The Forcing Vector ($\mathbf{c}_1$)")
-    st.code(f"x_m-x_p(t_m) = {c1}")
+    st.code(f"xdiff = {c1}")
     
     st.subheader("∫ Integral Result")
     st.metric(label="Adjoint Sensitivity Integral", value=f"{integral_value:.6f}")
@@ -164,7 +164,7 @@ if st.button("Run Simulation", type="primary"):
         st.subheader("Trajectory Divergence (X-Y Projection)")
         st.write("Visualizing how different parameter values ($k$) cause trajectories to fan out over time.")
         
-        fig3, ax3 = plt.subplots(figsize=(6, 3.5))
+        fig3, ax3 = plt.subplots(figsize=(8, 5))
         
         # Time vector for trajectories
         t_traj = np.linspace(0, tm, 100)
@@ -196,7 +196,7 @@ if st.button("Run Simulation", type="primary"):
         st.subheader("Error Magnitude vs. Time")
         st.write("How the distance ($||\mathbf{c}_1||$) between the True particle and your Model particle grows over time.")
         
-        fig4, ax4 = plt.subplots(figsize=(6, 3.5))
+        fig4, ax4 = plt.subplots(figsize=(8, 5))
         
         # Compute error for a slightly longer range to show drift behavior
         t_err = np.linspace(0, max(tm, 5.0), 100) 
@@ -240,7 +240,7 @@ if st.button("Run Simulation", type="primary"):
         # Compute Gradient numerically
         grad_vals = np.gradient(I_vals, k_range)
         
-        fig5, ax5 = plt.subplots(figsize=(6, 3.5))
+        fig5, ax5 = plt.subplots(figsize=(8, 5))
         
         # Plot Integral (Left Axis)
         ln1 = ax5.plot(k_range, I_vals, color='tab:blue', linewidth=2, label='Integral I(k)')
