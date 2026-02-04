@@ -131,7 +131,7 @@ true_alpha_input = st.sidebar.slider(r"True $\alpha$ (to generate $x_m$)", 0.0, 
 
 # Calculate xm based on the "True Alpha"
 # [t, St, u, a0, x0, xm, alpha]
-num_xm = sol['f_xp'](num_t, num_St, num_u, num_a0, num_x0, num_x0,true_alpha_input)
+num_xm = sol['f_xp'](num_t, num_St, num_u, num_a0, num_x0, num_x0, true_alpha_input)
 st.sidebar.info(f"Target Position ($x_m$): {num_xm:.4f}")
 
 # --- NEW PLOTS: Time Evolution ---
