@@ -127,7 +127,8 @@ st.sidebar.header("Optimization Target")
 true_alpha_input = st.sidebar.slider("Target Alpha (to generate xm)", 0.0, 5.0, 1.0, 0.1)
 
 # Calculate xm based on the "True Alpha"
-num_xm = sol['f_xp'](num_t, num_St, num_u, num_a0, num_x0, true_alpha_input)
+# [t, St, u, a0, x0, xm, alpha]
+num_xm = sol['f_xp'](num_t, num_St, num_u, num_a0, num_x0, num_x0,true_alpha_input)
 st.sidebar.info(f"Target Position ($x_m$): {num_xm:.4f}")
 
 # Plotting
