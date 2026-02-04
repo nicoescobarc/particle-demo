@@ -117,7 +117,7 @@ st.sidebar.header("System Parameters")
 num_t = st.sidebar.slider("Time (t)", min_value=1.0, max_value=20.0, value=10.0, step=0.5)
 num_St = st.sidebar.slider("Stokes Number (St)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
 num_u = st.sidebar.slider("Velocity (u)", min_value=-5.0, max_value=5.0, value=1.0, step=0.1)
-num_a0 = st.sidebar.slider("Initial a (a0)", min_value=0.1, max_value=5.0, value=2.0, step=0.1)
+num_a0 = st.sidebar.slider("Initial a (a0)", min_value=0.0, max_value=5.0, value=2.0, step=0.1)
 num_x0 = st.sidebar.slider("Initial Position (x0)", min_value=0.0, max_value=5.0, value=1.0, step=0.1)
 
 st.sidebar.markdown("---")
