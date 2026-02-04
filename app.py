@@ -167,7 +167,7 @@ st.pyplot(fig_time)
 st.markdown("---")
 
 # Plotting
-alpha_range = np.linspace(0, 8, 500)
+alpha_range = np.linspace(-5, 10, 1000)
 
 # Calculate values
 J_vals = sol['f_J'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
@@ -182,6 +182,7 @@ ax1.axvline(true_alpha_input, color='green', linestyle='--', alpha=0.5, label=r'
 ax1.set_title(r"Cost Function $J$")
 ax1.set_xlabel(r"$\alpha$")
 ax1.set_ylabel(r"$J$")
+ax1.set_xlim(alpha_range[0], alpha_range[-1])
 ax1.set_ylim(bottom=0)
 ax1.grid(True, alpha=0.3)
 ax1.legend()
@@ -193,6 +194,8 @@ ax2.axvline(true_alpha_input, color='green', linestyle='--', alpha=0.5, label=r'
 ax2.set_title(r"Gradient $\frac{dJ}{d\alpha}$")
 ax2.set_xlabel(r"$\alpha$")
 ax2.set_ylabel(r"Gradient Value")
+ax2.set_xlim(alpha_range[0], alpha_range[-1])
+ax2.set_ylim(-np.nanmax(grad_vals)*5, np.nanmax(grad_vals)*1.2)
 ax2.grid(True, alpha=0.3)
 ax2.legend()
 
