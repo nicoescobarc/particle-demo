@@ -82,12 +82,12 @@ We aim to minimize a cost function $J$ with respect to the parameter $\\alpha$.
 cols_desc = st.columns(2)
 with cols_desc[0]:
     st.markdown("### Dynamics (to get $a$)")
-    st.latex(r"-\frac{\mathrm{d}\,a(t)}{\mathrm{d}t} = \frac{\mathscr{F}}{\mathrm{St}} a(t) = \frac{1 + \alpha \, a(t)}{\mathrm{St}} a(t)")
+    st.latex(r"-\frac{\mathrm{d}\,a(t)}{\mathrm{d}t} = \frac{\mathscr{F}}{\mathrm{St}} a(t) = \frac{1 + \alpha \, a(t)}{\mathrm{St}} a(t), \quad a>0.")
     st.latex(r"a(0) = a_0")
 
 with cols_desc[1]:
     st.markdown("### Kinematics (to get $x_p$)")
-    st.latex(r"\frac{\mathrm{d}x_p(t)}{\mathrm{d}t} = u - a(t)")
+    st.latex(r"\frac{\mathrm{d}x_p(t)}{\mathrm{d}t} = u - a(t).")
     st.latex(r"x_p(0) = x_0")
 
 st.markdown("---")
