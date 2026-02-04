@@ -127,7 +127,7 @@ st.sidebar.markdown("---")
 st.sidebar.header("Optimization Target")
 # Instead of setting xm manually (which is hard to guess), we set the 'True Alpha'
 # and calculate the resulting xm, similar to the original script logic.
-true_alpha_input = st.sidebar.slider(r"True $\alpha$ (to generate $x_m$)", 0.0, 5.0, 1.0, 0.1)
+true_alpha_input = st.sidebar.slider(r"True $\alpha$ (to generate $x_m$)", 0.0, 50.0, 1.0, 0.1)
 
 # Calculate xm based on the "True Alpha"
 # [t, St, u, a0, x0, xm, alpha]
@@ -166,8 +166,27 @@ ax_t2.legend()
 st.pyplot(fig_time)
 st.markdown("---")
 
+# Plot Configuration
+st.subheader("4. Cost & Gradient Plot Settings")
+col_plt_1, col_plt_2, col_plt_3 = st.columns(3)
+
+with col_plt_1:
+    st.markdown("**Alpha Range (X-axis)**")
+    x_min_input = st.number_input("Min Alpha", value=-10.0, step=1.0)
+    x_max_input = st.number_input("Max Alpha", value=100.0, step=1.0)
+
+with col_plt_2:
+    st.markdown("**Cost Function (Y-axis)**")
+    y_j_min = st.text_input("Min J", value="", placeholder="Auto")
+    y_j_max = st.text_input("Max J", value="", placeholder="Auto")
+
+with col_plt_3:
+    st.markdown("**Gradient (Y-axis)**")
+    y_g_min = st.text_input("Min Grad", value="", placeholder="Auto")
+    y_g_max = st.text_input("Max Grad", value="", placeholder="Auto")
+
 # Plotting
-alpha_range = np.linspace(-5, 10, 1000)
+alpha_range = np.linspace(x_min_input, x_max_input, 1000)
 
 # Calculate values
 J_vals = sol['f_J'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
@@ -176,14 +195,21 @@ grad_vals = sol['f_dJdalpha'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alph
 # Create Plot
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
+def apply_limits(ax, y_min, y_max):
+    try:
+        if y_min.strip(): ax.set_ylim(bottom=float(y_min))
+        if y_max.strip(): ax.set_ylim(top=float(y_max))
+    except (ValueError, AttributeError):
+        pass
+
 # Plot 1: Cost Function
 ax1.plot(alpha_range, J_vals, color='blue', linewidth=2, label=r'$J(\alpha)$')
 ax1.axvline(true_alpha_input, color='green', linestyle='--', alpha=0.5, label=r'True $\alpha$')
 ax1.set_title(r"Cost Function $J$")
 ax1.set_xlabel(r"$\alpha$")
 ax1.set_ylabel(r"$J$")
-ax1.set_xlim(alpha_range[0], alpha_range[-1])
-ax1.set_ylim(bottom=0)
+ax1.set_xlim(x_min_input, x_max_input)
+apply_limits(ax1, y_j_min, y_j_max)
 ax1.grid(True, alpha=0.3)
 ax1.legend()
 
@@ -194,8 +220,8 @@ ax2.axvline(true_alpha_input, color='green', linestyle='--', alpha=0.5, label=r'
 ax2.set_title(r"Gradient $\frac{dJ}{d\alpha}$")
 ax2.set_xlabel(r"$\alpha$")
 ax2.set_ylabel(r"Gradient Value")
-ax2.set_xlim(alpha_range[0], alpha_range[-1])
-ax2.set_ylim(-np.nanmax(grad_vals)*5, np.nanmax(grad_vals)*1.2)
+ax2.set_xlim(x_min_input, x_max_input)
+apply_limits(ax2, y_g_min, y_g_max)
 ax2.grid(True, alpha=0.3)
 ax2.legend()
 
