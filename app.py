@@ -1,313 +1,162 @@
 import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
+import sympy as sp
 
-plt.rcParams.update({
-    "text.usetex": False
-    })
+# Page configuration
+st.set_page_config(
+    page_title="Differential Equation Optimizer",
+    layout="wide"
+)
 
-# --- Helper Functions based on Analytical Solutions ---
-
-def get_constants(u_fluid, u_p0):
-    """Calculates initial relative velocity magnitude (a0) and direction (n_hat)."""
-    rel_vec = u_fluid - u_p0
-    a0 = np.linalg.norm(rel_vec)
+# --- 1. SYMBOLIC COMPUTATION & CACHING ---
+# We use st.cache_resource to solve the ODEs only once, not every time a slider moves.
+@st.cache_resource
+def get_symbolic_solution():
+    t = sp.symbols('t', real=True, positive=True)
+    x, u = sp.symbols('x u', real=True)
+    xp = sp.Function('x_p')(t)
+    a = sp.Function('a')(t)
     
-    # Handle case where particle moves exactly with fluid
-    if a0 < 1e-9:
-        n_hat = np.zeros_like(rel_vec)
-    else:
-        n_hat = rel_vec / a0
-    return a0, n_hat
+    # Parameters
+    a0 = sp.symbols('a_0', real=True)
+    x0 = sp.symbols('x_0', real=True)
+    xm = sp.symbols('x_m', real=True)
+    St = sp.symbols('St', real=True)
+    alpha = sp.symbols('alpha', real=True)
 
-def compute_a_t(t, k, a0, St=1.0):
-    """Computes relative velocity magnitude a(t)."""
-    if a0 < 1e-9:
-        return 0.0
+    # Force term
+    F = 1 + alpha * a
     
-    C1 = a0 / (1 + k * a0)
-    exp_term = np.exp(-t / St)
-    denom = 1 - k * C1 * exp_term
-    
-    # Safety check for singularity
-    if abs(denom) < 1e-9:
-        return 0.0
-        
-    return (C1 * exp_term) / denom
+    # 1. Dynamic Equation: -da/dt = (F/St)*a
+    # Rearranged: da/dt = -(1 + alpha*a)*a / St
+    dyn_eq = sp.Eq(-sp.diff(a, t), (F/St)*a)
+    sol_dyn = sp.dsolve(dyn_eq, a, ics={a.subs(t, 0): a0})
+    a_sol = sp.simplify(sol_dyn.rhs)
 
-def compute_position(t, k, u_fluid, x0, a0, n_hat, St=1.0):
-    """
-    Computes position x_p(t) using the analytical derivation.
-    """
-    if a0 < 1e-9:
-        return x0 + u_fluid * t
+    # 2. Kinematic Equation: dxp/dt = u - a
+    kin_eq = sp.Eq(sp.diff(xp, t), u - a_sol)
+    sol_kin = sp.dsolve(kin_eq, xp, ics={xp.subs(t, 0): x0})
+    xp_sol = sp.simplify(sol_kin.rhs)
 
-    # Avoid division by zero if k is extremely small
-    if abs(k) < 1e-9: 
-        k = 1e-9
+    # 3. Cost Function and Gradient
+    # J = 1/2 * |xp - xm|
+    J = (1/2) * sp.sqrt((xp_sol - xm)**2)
+    dJdalpha = sp.diff(J, alpha)
 
-    C1 = a0 / (1 + k * a0)
+    # Create numerical functions (lambdify)
+    # Args order: t, St, u, a0, x0, xm, alpha
+    args = [t, St, u, a0, x0, xm, alpha]
+    f_xp = sp.lambdify(args, xp_sol, modules='numpy')
+    f_J = sp.lambdify(args, J, modules='numpy')
+    f_dJdalpha = sp.lambdify(args, dJdalpha, modules='numpy')
     
-    # Calculate the log term argument
-    numerator = 1 - k * C1 * np.exp(-t / St)
-    denominator = 1 - k * C1
-    
-    # Safety check for log domain
-    if numerator <= 0 or denominator <= 0:
-        return x0 + u_fluid * t
-        
-    log_arg = numerator / denominator
-    log_term = np.log(log_arg)
-    
-    displacement = u_fluid * t - (St / k) * log_term * n_hat
-    return x0 + displacement
+    return {
+        "a_latex": sp.latex(a_sol),
+        "xp_latex": sp.latex(xp_sol),
+        "J_latex": sp.latex(J),
+        "dJ_latex": sp.latex(dJdalpha),
+        "f_J": f_J,
+        "f_dJdalpha": f_dJdalpha,
+        "f_xp": f_xp
+    }
 
-def compute_adjoint_integral(t, k, a0, c1, n_hat, St=1.0):
-    """
-    Computes the adjoint sensitivity integral I(t).
-    """
-    if a0 < 1e-9 or abs(k) < 1e-9:
-        return 0.0
+# Load the cached solutions
+sol = get_symbolic_solution()
 
-    # 1. Project c1 onto n_hat (dot product)
-    c1_dot_n = np.dot(c1, n_hat)
-    
-    # 2. Get a(t)
-    a_t = compute_a_t(t, k, a0, St)
-    
-    # 3. Compute terms inside the bracket
-    val_a = (1 + k * a_t) / (1 + k * a0)
-    if val_a <= 0: return 0.0
-    term_log = np.log(val_a)
-    
-    val_b = (1 + k * a0) / (1 + k * a_t)
-    term_frac = val_b
-    
-    # Combine
-    prefactor = (St * c1_dot_n) / (k**2)
-    result = prefactor * (term_log + term_frac - 1)
-    
-    return result
+# --- 2. APP LAYOUT ---
 
-# --- Streamlit App UI ---
+st.title("Linear Forcing Optimization & Differential Equations")
 
-st.set_page_config(page_title="Adjoint Sensitivity Demo", layout="wide")
-
-st.title("Adjoint Sensitivity Demo")
+# Section 1: Problem Description
+st.header("1. Problem Description")
 st.markdown("""
-This app demonstrates the **analytical adjoint sensitivity** for a particle in a fluid flow.
-It compares a "True" system ($k=4$) against a "Model" system (user guess) and computes the sensitivity integral.
+This application solves a system of coupled differential equations governing a particle's motion under a forcing term.
+We aim to minimize a cost function $J$ with respect to the parameter $\\alpha$.
+
+**The System Equations:**
 """)
 
-# Constants
-St = 1.0
-u_fluid = np.array([0.5, 0.5, 0.5])
-k_true = 4.0
-x0 = np.array([0.0, 0.0, 0.0]) # Assume starting at origin
+cols_desc = st.columns(2)
+with cols_desc[0]:
+    st.markdown("### Dynamics (a)")
+    st.latex(r"-\frac{da(t)}{dt} = \frac{1 + \alpha a(t)}{St} a(t)")
+    st.latex(r"a(0) = a_0")
 
-# Sidebar Inputs
-st.sidebar.header("Simulation Parameters")
+with cols_desc[1]:
+    st.markdown("### Kinematics (x)")
+    st.latex(r"\frac{dx_p(t)}{dt} = u - a(t)")
+    st.latex(r"x_p(0) = x_0")
 
-st.sidebar.subheader("1. Initial Particle Velocity")
-col1, col2, col3 = st.sidebar.columns(3)
-u0_x = col1.number_input("x", value=0.0)
-u0_y = col2.number_input("y", value=0.0)
-u0_z = col3.number_input("z", value=0.0)
-u_p0 = np.array([u0_x, u0_y, u0_z])
+st.markdown("---")
 
-st.sidebar.subheader("2. Settings")
-tm = st.sidebar.number_input("Final Time (tm)", value=2.0, min_value=0.1, step=0.1)
-k_guess = st.sidebar.number_input("Guess for k", value=1.0, min_value=0.1, step=0.1)
+# Section 2: Analytic Solution
+st.header("2. Analytic Solutions & Gradient")
+st.markdown("Using symbolic mathematics, we derive the exact solutions for the state variables and the cost gradient.")
 
-# Main Computation
-if st.button("Run Simulation", type="primary"):
-    
-    # 1. Pre-computation
-    a0, n_hat = get_constants(u_fluid, u_p0)
-    
-    # 2. Forward Simulations
-    pos_true = compute_position(tm, k_true, u_fluid, x0, a0, n_hat, St)
-    pos_guess = compute_position(tm, k_guess, u_fluid, x0, a0, n_hat, St)
-    
-    # 3. Compute c1
-    c1 = pos_true - pos_guess
-    
-    # 4. Compute Integral
-    integral_value = compute_adjoint_integral(tm, k_guess, a0, c1, n_hat, St)
-    
-    # --- Results Display ---
-    
-    st.divider()
-    
-    c_left, c_right = st.columns(2)
-    with c_left:
-        st.subheader("True Position ($k=4$)")
-        st.info(f"{pos_true}")
-    with c_right:
-        st.subheader(f"Model Position ($k={k_guess}$)")
-        st.warning(f"{pos_guess}")
-        
-    st.divider()
-    
-    st.subheader("The Forcing Vector ($\mathbf{c}_1$)")
-    st.code(f"xdiff = {c1}")
-    
-    st.subheader("∫ Integral Result")
-    st.metric(label="Adjoint Sensitivity Integral", value=f"{integral_value:.6f}")
-    
-    st.divider()
-    
-    st.header("Some plots to visualize the dynamics")
-    st.markdown("Explore the physics and sensitivity landscapes through these interactive plots.")
-    
-    # TABS for the 4 Plots
-    tab1, tab2, tab3, tab4 = st.tabs(["Trajectory Divergence", "Error Evolution", "Sensitivity Landscape", "Terminal Error vs k"])
-    
-    # --- PLOT 1: DIVERGENCE OF TRAJECTORIES (FAN PLOT) ---
-    with tab1:
-        st.subheader("Trajectory Divergence (X-Y Projection)")
-        st.write("Visualizing how different parameter values ($k$) cause trajectories to vary out over time.")
-        
-        fig3, ax3 = plt.subplots(figsize=(8, 5))
-        
-        # Time vector for trajectories
-        t_traj = np.linspace(0, tm, 100)
-        
-        # 1. Plot True Trajectory
-        traj_true = np.array([compute_position(t, k_true, u_fluid, x0, a0, n_hat, St) for t in t_traj])
-        ax3.plot(traj_true[:,0], traj_true[:,1], 'k-', linewidth=3, label=f'True (k={k_true})')
-        
-        # 2. Plot User Guess
-        traj_guess = np.array([compute_position(t, k_guess, u_fluid, x0, a0, n_hat, St) for t in t_traj])
-        ax3.plot(traj_guess[:,0], traj_guess[:,1], 'r--', linewidth=2.5, label=f'Your Guess (k={k_guess})')
-        
-        # 3. Plot "Ghost" Trajectories (The Fan)
-        ghost_ks = []
-        for k_g in ghost_ks:
-            if k_g == k_guess or k_g == k_true: continue # Skip duplicates
-            traj_ghost = np.array([compute_position(t, k_g, u_fluid, x0, a0, n_hat, St) for t in t_traj])
-            ax3.plot(traj_ghost[:,0], traj_ghost[:,1], 'b-', alpha=0.15) # Faint blue lines
-            
-        ax3.set_xlabel("X Position")
-        ax3.set_ylabel("Y Position")
-        ax3.set_title("Trajectory Fan: Effect of Parameter k")
-        ax3.legend()
-        ax3.grid(True, alpha=0.3)
-        st.pyplot(fig3)
+st.subheader("State Solutions")
+st.latex(rf"a(t) = {sol['a_latex']}")
+st.latex(rf"x_p(t) = {sol['xp_latex']}")
 
-    # --- PLOT 2: ERROR MAGNITUDE VS TIME ---
-    with tab2:
-        st.subheader("Error Magnitude vs. Time")
-        st.write("How the distance ($||\mathbf{x}(t_m) - \mathbf{x_m}||$) between the True particle and your Model particle grows over time.")
-        
-        fig4, ax4 = plt.subplots(figsize=(8, 5))
-        
-        # Compute error for a slightly longer range to show drift behavior
-        t_err = np.linspace(0, max(tm, 5.0), 100) 
-        errors = []
-        
-        for t_val in t_err:
-            p_true = compute_position(t_val, k_true, u_fluid, x0, a0, n_hat, St)
-            p_model = compute_position(t_val, k_guess, u_fluid, x0, a0, n_hat, St)
-            dist = np.linalg.norm(p_true - p_model)
-            errors.append(dist)
-            
-        ax4.plot(t_err, errors, color='purple', linewidth=2)
-        
-        # Mark the measurement time tm
-        current_error = np.linalg.norm(pos_true - pos_guess)
-        ax4.scatter([tm], [current_error], color='red', s=100, zorder=5, label=f'Measurement Time $t_m$')
-        ax4.axvline(x=tm, color='gray', linestyle='--', alpha=0.5)
-        
-        ax4.set_xlabel("Time (t)")
-        ax4.set_ylabel("Error Magnitude $||\mathbf{x}(t_m) - \mathbf{x_m}||$")
-        ax4.set_title("Evolution of Prediction Error")
-        ax4.legend()
-        ax4.grid(True, alpha=0.3)
-        st.pyplot(fig4)
+st.subheader("Cost Function & Gradient")
+st.markdown("We define the cost function $J$ as the distance from a target position $x_m$:")
+st.latex(r"J = \frac{1}{2} \sqrt{(x_p(t) - x_m)^2} = \frac{1}{2} |x_p(t) - x_m|")
+st.markdown("The gradient with respect to $\\alpha$ is:")
+st.latex(rf"\frac{{dJ}}{{d\alpha}} = {sol['dJ_latex']}")
 
-    # --- PLOT 3: SENSITIVITY LANDSCAPE ---
-    with tab3:
-        st.subheader("Sensitivity Landscape & Gradient")
-        st.write("The Gradient $\partial H / \partial \\alpha$ ")
-        
-        k_range = np.linspace(0.1, 5.0, 200)
-        I_vals = []
-        
-        # Compute I(k) for the whole range
-        for k_val in k_range:
-            p_k = compute_position(tm, k_val, u_fluid, x0, a0, n_hat, St)
-            c1_k = pos_true - p_k # c1 relative to TRUE position
-            val = compute_adjoint_integral(tm, k_val, a0, c1_k, n_hat, St)
-            I_vals.append(val)
-            
-        # Compute Gradient numerically
-        # grad_vals = np.gradient(I_vals, k_range)
-        
-        fig5, ax5 = plt.subplots(figsize=(8, 5))
-        
-        # Plot Integral (Left Axis)
-        ln1 = ax5.plot(k_range, I_vals, color='tab:blue', linewidth=2, label='Integral I(k)')
-        ax5.set_xlabel("Parameter Guess k")
-        ax5.set_ylabel("$\partial H / \partial \\alpha$", color='tab:blue')
-        ax5.tick_params(axis='y', labelcolor='tab:blue')
-        
-        # Plot Gradient (Right Axis)
-        # ax5_twin = ax5.twinx()
-        # ln2 = ax5_twin.plot(k_range, grad_vals, color='tab:orange', linestyle='--', linewidth=2, label='Gradient dI/dk')
-        # ax5_twin.set_ylabel("Gradient (Sensitivity)", color='tab:orange')
-        # ax5_twin.tick_params(axis='y', labelcolor='tab:orange')
-        
-        # User Marker
-        ax5.scatter([k_guess], [integral_value], color='red', s=100, zorder=10, label='Your Guess')
-        
-        # True k line
-        ax5.axvline(x=k_true, color='green', linestyle=':', alpha=0.5, label=f'True k={k_true}')
-        
-        # Combined Legend
-        # lines = ln1
-        # labels = [l.get_label() for l in lines]
-        # ax5.legend(lines, labels, loc='upper center')
-        
-        ax5.set_title("Sensitivity Landscape")
-        ax5.grid(True, alpha=0.3)
-        
-        st.pyplot(fig5)
+st.markdown("---")
 
-    # --- PLOT 4: TERMINAL ERROR VS K ---
-    with tab4:
-        st.subheader("Terminal Error vs Parameter k")
-        st.write("This plot shows the magnitude of the position error at time $t_m$ as a function of the parameter guess $k$.")
-        st.write("Ideally, this error should be zero when $k = k_{true}$.")
+# Section 3: Interactive Analysis
+st.header("3. Interactive Analysis")
+st.markdown("Adjust the parameters below to visualize how the cost function and its gradient change with respect to $\\alpha$.")
 
-        k_range_err = np.linspace(0.1, 8.0, 200)
-        terminal_errors = []
+# Sidebar for controls
+st.sidebar.header("System Parameters")
 
-        # True position is constant regardless of guess k
-        pos_true_fixed = compute_position(tm, k_true, u_fluid, x0, a0, n_hat, St)
+# Sliders
+num_t = st.sidebar.slider("Time (t)", min_value=1.0, max_value=20.0, value=10.0, step=0.5)
+num_St = st.sidebar.slider("Stokes Number (St)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
+num_u = st.sidebar.slider("Velocity (u)", min_value=-5.0, max_value=5.0, value=1.0, step=0.1)
+num_a0 = st.sidebar.slider("Initial a (a0)", min_value=0.1, max_value=5.0, value=2.0, step=0.1)
+num_x0 = st.sidebar.slider("Initial Position (x0)", min_value=0.0, max_value=5.0, value=1.0, step=0.1)
 
-        for k_val in k_range_err:
-            # Position with guessed k
-            p_guess = compute_position(tm, k_val, u_fluid, x0, a0, n_hat, St)
-            
-            # Error magnitude
-            err_mag = np.linalg.norm(pos_true_fixed - p_guess)
-            terminal_errors.append(err_mag)
+st.sidebar.markdown("---")
+st.sidebar.header("Optimization Target")
+# Instead of setting xm manually (which is hard to guess), we set the 'True Alpha'
+# and calculate the resulting xm, similar to the original script logic.
+true_alpha_input = st.sidebar.slider("Target Alpha (to generate xm)", 0.0, 5.0, 1.0, 0.1)
 
-        fig6, ax6 = plt.subplots(figsize=(8, 5))
-        ax6.plot(k_range_err, terminal_errors, color='darkorange', linewidth=2, label='Error Magnitude')
-        
-        # Current user guess marker
-        current_err_mag = np.linalg.norm(pos_true - pos_guess)
-        ax6.scatter([k_guess], [current_err_mag], color='red', s=100, zorder=5, label=f'Your Guess (k={k_guess})')
+# Calculate xm based on the "True Alpha"
+num_xm = sol['f_xp'](num_t, num_St, num_u, num_a0, num_x0, true_alpha_input)
+st.sidebar.info(f"Target Position ($x_m$): {num_xm:.4f}")
 
-        # True k marker
-        ax6.axvline(x=k_true, color='green', linestyle='--', label=f'True k={k_true}')
-        
-        ax6.set_xlabel("Parameter Guess k")
-        ax6.set_ylabel("Terminal Position Error $||\mathbf{x}(t_m) - \mathbf{x}_{true}(t_m)||$")
-        ax6.set_title(f"Terminal Error at t={tm} vs k")
-        ax6.legend()
-        ax6.grid(True, alpha=0.3)
-        
-        st.pyplot(fig6)
+# Plotting
+alpha_range = np.linspace(0, 8, 500)
+
+# Calculate values
+J_vals = sol['f_J'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
+grad_vals = sol['f_dJdalpha'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
+
+# Create Plot
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+
+# Plot 1: Cost Function
+ax1.plot(alpha_range, J_vals, color='blue', linewidth=2, label=r'$J(\alpha)$')
+ax1.axvline(true_alpha_input, color='green', linestyle='--', alpha=0.5, label='Target Alpha')
+ax1.set_title(r"Cost Function $J$")
+ax1.set_xlabel(r"$\alpha$")
+ax1.set_ylabel(r"$J$")
+ax1.grid(True, alpha=0.3)
+ax1.legend()
+
+# Plot 2: Gradient
+ax2.plot(alpha_range, grad_vals, color='red', linewidth=2, label=r'$\frac{dJ}{d\alpha}$')
+ax2.axhline(0, color='black', linewidth=1, linestyle='-')
+ax2.axvline(true_alpha_input, color='green', linestyle='--', alpha=0.5, label='Target Alpha')
+ax2.set_title(r"Gradient $\frac{dJ}{d\alpha}$")
+ax2.set_xlabel(r"$\alpha$")
+ax2.set_ylabel(r"Gradient Value")
+ax2.grid(True, alpha=0.3)
+ax2.legend()
+
+st.pyplot(fig)
