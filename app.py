@@ -117,7 +117,7 @@ st.markdown("Adjust the parameters below to visualize how the cost function and 
 st.sidebar.header("System Parameters")
 
 # Sliders
-num_t = st.sidebar.slider("Final time ($t_f$)", min_value=0.1, max_value=20.0, value=10.0, step=0.1)
+num_t = st.sidebar.slider("Final time ($t_m$)", min_value=0.1, max_value=20.0, value=5.0, step=0.1)
 num_St = st.sidebar.slider("Stokes Number ($\mathrm{St}$)", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
 num_u = st.sidebar.slider("Velocity ($u$)", min_value=-5.0, max_value=5.0, value=1.0, step=0.1)
 num_a0 = st.sidebar.slider("Initial relative velocity ($a_0$)", min_value=0.0, max_value=10.0, value=1.0, step=0.1)
@@ -127,7 +127,7 @@ st.sidebar.markdown("---")
 st.sidebar.header("Optimization Target")
 # Instead of setting xm manually (which is hard to guess), we set the 'True Alpha'
 # and calculate the resulting xm, similar to the original script logic.
-true_alpha_input = st.sidebar.slider(r"True $\alpha$ (to generate $x_m$)", 0.0, 50.0, 1.0, 0.1)
+true_alpha_input = st.sidebar.slider(r"True $\alpha$ ($\alpha_T$ to generate $x_m$)", min_value=0.0, max_value=50.0, value=5.0, step=0.1)
 
 # Calculate xm based on the "True Alpha"
 # [t, St, u, a0, x0, xm, alpha]
@@ -170,10 +170,18 @@ st.markdown("---")
 st.subheader("4. Cost & Gradient Plot Settings")
 col_plt_1, col_plt_2, col_plt_3 = st.columns(3)
 
+# Plotting
+
+
 with col_plt_1:
     st.markdown("**Alpha Range (X-axis)**")
     x_min_input = st.number_input("Min Alpha", value=-10.0, step=1.0)
-    x_max_input = st.number_input("Max Alpha", value=100.0, step=1.0)
+    x_max_input = st.number_input("Max Alpha", value=20.0, step=1.0)
+
+# Calculate values
+alpha_range = np.linspace(x_min_input, x_max_input, 1000)
+J_vals = sol['f_J'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
+grad_vals = sol['f_dJdalpha'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
 
 with col_plt_2:
     st.markdown("**Cost Function (Y-axis)**")
@@ -182,15 +190,9 @@ with col_plt_2:
 
 with col_plt_3:
     st.markdown("**Gradient (Y-axis)**")
-    y_g_min = st.text_input("Min Grad", value="", placeholder="Auto")
-    y_g_max = st.text_input("Max Grad", value="", placeholder="Auto")
+    y_g_min = st.text_input("Min Grad", value=-0.2)
+    y_g_max = st.text_input("Max Grad", value=0.1)
 
-# Plotting
-alpha_range = np.linspace(x_min_input, x_max_input, 1000)
-
-# Calculate values
-J_vals = sol['f_J'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
-grad_vals = sol['f_dJdalpha'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
 
 # Create Plot
 fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
