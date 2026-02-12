@@ -24,6 +24,7 @@ def get_symbolic_solution():
     xm = sp.symbols('x_m', real=True)
     St = sp.symbols('St', real=True)
     alpha = sp.symbols('alpha', real=True)
+    blending_factor = sp.symbols('theta', real=True)
 
     # Force term
     F = 1 + alpha * a
@@ -41,17 +42,20 @@ def get_symbolic_solution():
 
     # 3. Cost Function and Gradient
     # J = 1/2 * |xp - xm|
-    J = (1/2) * sp.sqrt((xp_sol - xm)**2)
+    J = (1/2)*((1-blending_factor)*alpha**2 + blending_factor)*(sp.sqrt((xp_sol-xm)**2))**2
+    # J = (1/2) * (sp.sqrt((xp_sol - xm)**2))**2
     dJdalpha = sp.diff(J, alpha)
+    d2Jdalpha2 = sp.diff(dJdalpha, alpha)
 
     # Create numerical functions (lambdify)
-    # Args order: t, St, u, a0, x0, xm, alpha
-    args = [t, St, u, a0, x0, xm, alpha]
+    # Args order: t, St, u, a0, x0, xm, alpha, blending_factor
+    args = [t, St, u, a0, x0, xm, alpha, blending_factor]
     f_xp = sp.lambdify(args, xp_sol, modules='numpy')
     f_a = sp.lambdify(args, a_sol, modules='numpy')
     f_J = sp.lambdify(args, J, modules='numpy')
     f_dJdalpha = sp.lambdify(args, dJdalpha, modules='numpy')
-    
+    f_d2Jdalpha2 = sp.lambdify(args, d2Jdalpha2, modules='numpy')
+
     return {
         "a_latex": sp.latex(a_sol),
         "xp_latex": sp.latex(xp_sol),
@@ -59,6 +63,7 @@ def get_symbolic_solution():
         "dJ_latex": sp.latex(dJdalpha),
         "f_J": f_J,
         "f_dJdalpha": f_dJdalpha,
+        "f_d2Jdalpha2": f_d2Jdalpha2,
         "f_xp": f_xp,
         "f_a": f_a
     }
@@ -102,7 +107,7 @@ st.latex(rf"x_p(t) = {sol['xp_latex']}")
 
 st.subheader("Cost Function & Gradient")
 st.markdown("We define the cost function $J$ as the distance from a target position $x_m$:")
-st.latex(r"J = \frac{1}{2} \sqrt{(x_p(t) - x_m)^2} = \frac{1}{2} |x_p(t) - x_m|")
+# st.latex(r"J = \frac{1}{2} \sqrt{(x_p(t) - x_m)^2} = \frac{1}{2} |x_p(t) - x_m|")
 st.latex(rf"J = {sol['J_latex']}")
 st.markdown("The gradient with respect to $\\alpha$ is:")
 st.latex(rf"\frac{{dJ}}{{d\alpha}} = {sol['dJ_latex']}")
@@ -127,11 +132,17 @@ st.sidebar.markdown("---")
 st.sidebar.header("Optimization Target")
 # Instead of setting xm manually (which is hard to guess), we set the 'True Alpha'
 # and calculate the resulting xm, similar to the original script logic.
-true_alpha_input = st.sidebar.slider(r"True $\alpha$ ($\alpha_T$ to generate $x_m$)", min_value=0.0, max_value=50.0, value=5.0, step=0.1)
+true_alpha_input = st.sidebar.slider(r"True $\alpha$ ($\alpha_T$ to generate $x_m$)", min_value=0.0, max_value=200.0, value=5.0, step=0.1)
+
+st.sidebar.markdown("---")
+st.sidebar.header("Cost blending")
+# Instead of setting xm manually (which is hard to guess), we set the 'True Alpha'
+# and calculate the resulting xm, similar to the original script logic.
+blending_factor = st.sidebar.slider(r"$\theta$", min_value=0.0, max_value=1.0, value=0.9, step=0.01)
 
 # Calculate xm based on the "True Alpha"
-# [t, St, u, a0, x0, xm, alpha]
-num_xm = sol['f_xp'](num_t, num_St, num_u, num_a0, num_x0, num_x0, true_alpha_input)
+# [t, St, u, a0, x0, xm, alpha, blending_factor]
+num_xm = sol['f_xp'](num_t, num_St, num_u, num_a0, num_x0, num_x0, true_alpha_input, blending_factor)
 st.sidebar.info(f"Target Position ($x_m$): {num_xm:.4f}")
 
 # --- NEW PLOTS: Time Evolution ---
@@ -140,9 +151,9 @@ st.subheader("System Evolution over Time (at Target Alpha)")
 t_array = np.linspace(0, num_t, 200)
 
 # Evaluate state variables over time using the "Target Alpha"
-# args: t, St, u, a0, x0, xm, alpha
-xp_time_vals = sol['f_xp'](t_array, num_St, num_u, num_a0, num_x0, num_xm, true_alpha_input)
-a_time_vals = sol['f_a'](t_array, num_St, num_u, num_a0, num_x0, num_xm, true_alpha_input)
+# args: t, St, u, a0, x0, xm, alpha, blending_factor
+xp_time_vals = sol['f_xp'](t_array, num_St, num_u, num_a0, num_x0, num_xm, true_alpha_input, blending_factor)
+a_time_vals = sol['f_a'](t_array, num_St, num_u, num_a0, num_x0, num_xm, true_alpha_input, blending_factor)
 
 fig_time, (ax_t1, ax_t2) = plt.subplots(1, 2, figsize=(12, 5))
 
@@ -175,27 +186,28 @@ col_plt_1, col_plt_2, col_plt_3 = st.columns(3)
 
 with col_plt_1:
     st.markdown("**Alpha Range (X-axis)**")
-    x_min_input = st.number_input("Min Alpha", value=-10.0, step=1.0)
-    x_max_input = st.number_input("Max Alpha", value=20.0, step=1.0)
+    x_min_input = st.number_input("Min Alpha", value=-5.0, step=1.0)
+    x_max_input = st.number_input("Max Alpha", value=50.0, step=1.0)
 
 # Calculate values
 alpha_range = np.linspace(x_min_input, x_max_input, 1000)
-J_vals = sol['f_J'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
-grad_vals = sol['f_dJdalpha'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range)
+J_vals = sol['f_J'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range, blending_factor)
+grad_vals = sol['f_dJdalpha'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range, blending_factor)
+d2Jdalpha2_vals = sol['f_d2Jdalpha2'](num_t, num_St, num_u, num_a0, num_x0, num_xm, alpha_range, blending_factor)
 
 with col_plt_2:
     st.markdown("**Cost Function (Y-axis)**")
-    y_j_min = st.text_input("Min J", value="", placeholder="Auto")
-    y_j_max = st.text_input("Max J", value="", placeholder="Auto")
+    y_j_min = st.text_input("Min J", value=-0.01)
+    y_j_max = st.text_input("Max J", value=1)
 
 with col_plt_3:
     st.markdown("**Gradient (Y-axis)**")
     y_g_min = st.text_input("Min Grad", value=-0.2)
-    y_g_max = st.text_input("Max Grad", value=0.1)
+    y_g_max = st.text_input("Max Grad", value=0.2)
 
 
 # Create Plot
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+fig1, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
 
 def apply_limits(ax, y_min, y_max):
     try:
@@ -226,5 +238,17 @@ ax2.set_xlim(x_min_input, x_max_input)
 apply_limits(ax2, y_g_min, y_g_max)
 ax2.grid(True, alpha=0.3)
 ax2.legend()
+st.pyplot(fig1)
 
-st.pyplot(fig)
+fig2, ax3 = plt.subplots(1, 1, figsize=(12, 5))
+ax3.plot(alpha_range, d2Jdalpha2_vals, color='blue', linewidth=2, label=r'$\frac{d^2J}{d\alpha^2}$')
+ax3.axvline(true_alpha_input, color='green', linestyle='--', alpha=0.5, label=r'True $\alpha$')
+ax3.set_title(r"Second Derivative $\frac{d^2J}{d\alpha^2}$")
+ax3.set_xlabel(r"$\alpha$")
+ax3.set_ylabel(r"Second Derivative Value")
+ax3.set_xlim(x_min_input, x_max_input)
+# ax3.set_ylim(bottom=min(d2Jdalpha2_vals), top=max(d2Jdalpha2_vals))
+ax3.grid(True, alpha=0.3)
+ax3.legend()
+
+st.pyplot(fig2)
